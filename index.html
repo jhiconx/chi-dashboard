@@ -372,7 +372,7 @@
           <div>
             <div class="badge-row">
               <span class="badge dark">CHI Cross-Chain Holder Registry</span>
-              <span class="badge">Investor Audit View</span>
+              <span class="badge">Live Holder Dashboard</span>
             </div>
             <div class="powered">Powered By GFT Rewards</div>
           </div>
@@ -382,18 +382,18 @@
           A simple public dashboard that shows Ethereum + Base CHI holders, explains how holder data is indexed, and presents one cross-chain unique holder number from the indexer output.
         </p>
       </div>
-      <button class="button">View Registry Contract</button>
     </section>
 
     <section class="metrics">
       <div class="card">
         <div class="metric-title">Ethereum Holders</div>
-        <div id="ethereumHolders" class="metric-value">67</div>
+        <div id="ethereumHolders" class="metric-value loading">Loading</div>
+        <div class="live-status"><span id="ethereumStatusDot" class="live-dot"></span><span id="ethereumStatusText">Fetching Ethereum holders</span></div>
       </div>
       <div class="card">
         <div class="metric-title">Base Holders</div>
         <div id="baseHolders" class="metric-value loading">Loading</div>
-        <div class="live-status"><span id="baseStatusDot" class="live-dot"></span><span id="baseStatusText">Fetching live holders</span></div>
+        <div class="live-status"><span id="baseStatusDot" class="live-dot"></span><span id="baseStatusText">Fetching Base holders</span></div>
       </div>
       <div class="card">
         <div class="metric-title">Indexed Sources</div>
@@ -444,7 +444,6 @@
     <div class="tabs">
       <button class="tab active" onclick="showTab('architecture', this)">Architecture</button>
       <button class="tab" onclick="showTab('holders', this)">Holder Table</button>
-      <button class="tab" onclick="showTab('audit', this)">Audit Proof</button>
       <button class="tab" onclick="showTab('supply', this)">Supply Risk</button>
     </div>
 
@@ -481,7 +480,7 @@
     <section id="holders" class="tab-panel">
       <div class="card">
         <h2 class="section-title">Cross-Chain Holder Lookup</h2>
-        <p class="section-text">Live Base holder count is fetched from Blockscout. The sample wallet rows below remain static until connected to a full holder-list table.</p>
+        <p class="section-text">Live Ethereum and Base holder counts are fetched from Blockscout. The sample wallet rows below remain static until connected to a full holder-list table.</p>
         <table style="margin-top:18px;">
           <thead>
             <tr>
@@ -531,27 +530,6 @@
       </div>
     </section>
 
-    <section id="audit" class="tab-panel">
-      <div class="grid">
-        <div class="card">
-          <h2 class="section-title">Public Verification Record</h2>
-          <div class="audit-list" style="margin-top:18px;">
-            <div class="audit-row"><span>Ethereum snapshot block</span><strong>Block # TBD</strong></div>
-            <div class="audit-row"><span>Base snapshot block</span><strong>Block # TBD</strong></div>
-            <div class="audit-row"><span>Holder Merkle root</span><strong>0x...</strong></div>
-            <div class="audit-row"><span>Registry contract</span><strong>0x...</strong></div>
-            <div class="audit-row"><span>Last verified</span><strong>Pending</strong></div>
-          </div>
-        </div>
-        <div class="card warning">
-          <h2 class="section-title">What Etherscan Will Not Do</h2>
-          <p class="section-text">
-            Etherscan will still show only Ethereum holders. BaseScan will still show only Base holders. This registry creates a separate public source of truth for cross-chain unique holders.
-          </p>
-        </div>
-      </div>
-    </section>
-
     <section id="supply" class="tab-panel">
       <div class="grid">
         <div class="card">
@@ -573,7 +551,7 @@
           </div>
         </div>
         <div class="card">
-          <h2 class="section-title">Investor Note</h2>
+          <h2 class="section-title">Supply Note</h2>
           <p class="section-text">
             A high FDV relative to circulating market cap can create dilution concerns if large amounts of CHI become tradable without matching demand.
           </p>
@@ -582,27 +560,20 @@
     </section>
 
     <p class="footer-note">
-      Live dashboard. Base holder count updates from Blockscout on page load. Ethereum holders and cross-chain overlap are still configured constants until you connect a second live source.
+      Live dashboard. Ethereum and Base holder counts update from Blockscout on page load. Unique holders are calculated by comparing both live holder lists wallet by wallet when both sources load successfully.
     </p>
   </main>
 
   <script>
     const CONFIG = {
-      // Base CHI token from your BaseScan link.
+      ethereumTokenAddress: "0x83E8fb8D8176224FCC828EdC73E152EC1818a2dA",
       baseTokenAddress: "0x25Ec4c3eF2A21d178922Fb02c7F92111852165E8",
 
-      // Ethereum CHI is still static because the prototype only had a shortened address.
-      // Replace with the full Ethereum token address when you want that side live too.
-      ethereumHolders: 67,
-
-      // Your old dashboard implied 25 wallets overlapped across Ethereum and Base:
-      // 67 + 176 - 218 = 25.
-      crossChainOverlap: 25,
-
-      // Fallback number shown only if the live API fails.
+      fallbackEthereumHolders: 67,
       fallbackBaseHolders: 190,
+      fallbackCrossChainOverlap: 25,
 
-      // Public Blockscout endpoint, no API key needed.
+      blockscoutEthereumApi: "https://eth.blockscout.com/api",
       blockscoutBaseApi: "https://base.blockscout.com/api"
     };
 
@@ -625,9 +596,9 @@
       el.classList.remove('loading');
     }
 
-    function setStatus(kind, text) {
-      const dot = document.getElementById('baseStatusDot');
-      const label = document.getElementById('baseStatusText');
+    function setStatus(chain, kind, text) {
+      const dot = document.getElementById(`${chain}StatusDot`);
+      const label = document.getElementById(`${chain}StatusText`);
       if (dot) dot.className = `live-dot ${kind}`;
       if (label) label.textContent = text;
     }
@@ -647,40 +618,85 @@
       setText('uniqueBarValue', unique.toLocaleString());
     }
 
-    async function fetchBaseHolderCount() {
-      const url = new URL(CONFIG.blockscoutBaseApi);
-      url.searchParams.set('module', 'token');
-      url.searchParams.set('action', 'getTokenHolders');
-      url.searchParams.set('contractaddress', CONFIG.baseTokenAddress);
-      url.searchParams.set('page', '1');
-      url.searchParams.set('offset', '10000');
+    function normalizeHolderAddress(row) {
+      const raw = row.address || row.address_hash?.hash || row.address_hash || row.holder || row.account;
+      return typeof raw === 'string' ? raw.toLowerCase() : null;
+    }
 
-      const response = await fetch(url.toString(), { cache: 'no-store' });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    async function fetchHolderList(apiBaseUrl, tokenAddress) {
+      const holders = new Set();
+      let page = 1;
+      const offset = 10000;
 
-      const data = await response.json();
-      if (!Array.isArray(data.result)) throw new Error(data.message || 'Unexpected API response');
+      while (true) {
+        const url = new URL(apiBaseUrl);
+        url.searchParams.set('module', 'token');
+        url.searchParams.set('action', 'getTokenHolders');
+        url.searchParams.set('contractaddress', tokenAddress);
+        url.searchParams.set('page', String(page));
+        url.searchParams.set('offset', String(offset));
 
-      // Count all addresses returned by Blockscout with holder balances.
-      return data.result.length;
+        const response = await fetch(url.toString(), { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const data = await response.json();
+        if (!Array.isArray(data.result)) throw new Error(data.message || 'Unexpected API response');
+
+        for (const row of data.result) {
+          const address = normalizeHolderAddress(row);
+          const value = row.value ?? row.balance;
+          if (address && value !== '0') holders.add(address);
+        }
+
+        if (data.result.length < offset) break;
+        page += 1;
+      }
+
+      return holders;
+    }
+
+    function countOverlap(setA, setB) {
+      let overlap = 0;
+      for (const address of setA) {
+        if (setB.has(address)) overlap += 1;
+      }
+      return overlap;
     }
 
     async function loadLiveData() {
-      const ethereum = CONFIG.ethereumHolders;
-      let base;
-      let usedFallback = false;
+      const [ethereumResult, baseResult] = await Promise.allSettled([
+        fetchHolderList(CONFIG.blockscoutEthereumApi, CONFIG.ethereumTokenAddress),
+        fetchHolderList(CONFIG.blockscoutBaseApi, CONFIG.baseTokenAddress)
+      ]);
 
-      try {
-        base = await fetchBaseHolderCount();
-        setStatus('ok', `Live from Blockscout · ${new Date().toLocaleString()}`);
-      } catch (error) {
-        console.error('Live holder fetch failed:', error);
-        base = CONFIG.fallbackBaseHolders;
-        usedFallback = true;
-        setStatus('error', 'Live fetch failed — showing fallback count');
+      const ethereumLive = ethereumResult.status === 'fulfilled';
+      const baseLive = baseResult.status === 'fulfilled';
+
+      const ethereumSet = ethereumLive ? ethereumResult.value : new Set();
+      const baseSet = baseLive ? baseResult.value : new Set();
+
+      const ethereum = ethereumLive ? ethereumSet.size : CONFIG.fallbackEthereumHolders;
+      const base = baseLive ? baseSet.size : CONFIG.fallbackBaseHolders;
+
+      let unique;
+      if (ethereumLive && baseLive) {
+        const allHolders = new Set([...ethereumSet, ...baseSet]);
+        unique = allHolders.size;
+      } else {
+        unique = Math.max(0, ethereum + base - CONFIG.fallbackCrossChainOverlap);
       }
 
-      const unique = Math.max(0, ethereum + base - CONFIG.crossChainOverlap);
+      setStatus(
+        'ethereum',
+        ethereumLive ? 'ok' : 'error',
+        ethereumLive ? `Live from Blockscout · ${new Date().toLocaleString()}` : 'Ethereum live fetch failed — showing fallback count'
+      );
+
+      setStatus(
+        'base',
+        baseLive ? 'ok' : 'error',
+        baseLive ? `Live from Blockscout · ${new Date().toLocaleString()}` : 'Base live fetch failed — showing fallback count'
+      );
 
       setMetric('ethereumHolders', ethereum);
       setMetric('baseHolders', base);
@@ -688,8 +704,14 @@
       setMetric('uniqueHolders', unique);
       updateBars({ ethereum, base, unique });
 
-      if (usedFallback) {
-        setText('baseBarValue', `${base.toLocaleString()}*`);
+      if (!ethereumLive) setText('ethereumBarValue', `${ethereum.toLocaleString()}*`);
+      if (!baseLive) setText('baseBarValue', `${base.toLocaleString()}*`);
+
+      if (ethereumLive && baseLive) {
+        const overlap = countOverlap(ethereumSet, baseSet);
+        console.log(`Live holder comparison complete. Ethereum: ${ethereum}, Base: ${base}, Overlap: ${overlap}, Unique: ${unique}`);
+      } else {
+        console.warn('One or more live holder sources failed. Fallback counts were used.');
       }
     }
 
