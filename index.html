@@ -418,7 +418,6 @@
           <div>
             <div class="badge-row">
               <span class="badge dark">CHI Cross-Chain Holder Registry</span>
-              <span class="badge">Live Holder Dashboard</span>
             </div>
             <div class="powered">Powered By GFT Rewards</div>
           </div>
@@ -430,7 +429,7 @@
         <div class="actions">
           <a class="button" href="https://eth.blockscout.com/token/0x83E8fb8D8176224FCC828EdC73E152EC1818a2dA" target="_blank" rel="noopener">Open Ethereum CHI</a>
           <a class="button" href="https://base.blockscout.com/token/0x25Ec4c3eF2A21d178922Fb02c7F92111852165E8" target="_blank" rel="noopener">Open Base CHI</a>
-          <button class="button secondary" type="button" onclick="loadLiveData()">Refresh live counts</button>
+          <button id="refreshLiveButton" class="button secondary" type="button" onclick="loadLiveData()" aria-label="Refresh live holder counts">Refresh live counts</button>
         </div>
       </div>
     </section>
@@ -685,54 +684,70 @@
     }
 
     async function loadLiveData() {
-      const [ethereumResult, baseResult] = await Promise.allSettled([
-        fetchHolderList(CONFIG.blockscoutEthereumApi, CONFIG.ethereumTokenAddress),
-        fetchHolderList(CONFIG.blockscoutBaseApi, CONFIG.baseTokenAddress)
-      ]);
-
-      const ethereumLive = ethereumResult.status === 'fulfilled';
-      const baseLive = baseResult.status === 'fulfilled';
-
-      const ethereumSet = ethereumLive ? ethereumResult.value : new Set();
-      const baseSet = baseLive ? baseResult.value : new Set();
-
-      const ethereum = ethereumLive ? ethereumSet.size : CONFIG.fallbackEthereumHolders;
-      const base = baseLive ? baseSet.size : CONFIG.fallbackBaseHolders;
-
-      let unique;
-      if (ethereumLive && baseLive) {
-        const allHolders = new Set([...ethereumSet, ...baseSet]);
-        unique = allHolders.size;
-      } else {
-        unique = Math.max(0, ethereum + base - CONFIG.fallbackCrossChainOverlap);
+      const refreshButton = document.getElementById('refreshLiveButton');
+      if (refreshButton) {
+        refreshButton.disabled = true;
+        refreshButton.textContent = 'Refreshing live counts...';
       }
 
-      setStatus(
-        'ethereum',
-        ethereumLive ? 'ok' : 'error',
-        ethereumLive ? `Live from Blockscout · ${new Date().toLocaleString()}` : 'Ethereum live fetch failed — showing fallback count'
-      );
+      try {
+        setStatus('ethereum', '', 'Refreshing Ethereum holders');
+        setStatus('base', '', 'Refreshing Base holders');
 
-      setStatus(
-        'base',
-        baseLive ? 'ok' : 'error',
-        baseLive ? `Live from Blockscout · ${new Date().toLocaleString()}` : 'Base live fetch failed — showing fallback count'
-      );
+        const [ethereumResult, baseResult] = await Promise.allSettled([
+          fetchHolderList(CONFIG.blockscoutEthereumApi, CONFIG.ethereumTokenAddress),
+          fetchHolderList(CONFIG.blockscoutBaseApi, CONFIG.baseTokenAddress)
+        ]);
 
-      setMetric('ethereumHolders', ethereum);
-      setMetric('baseHolders', base);
-      setMetric('indexedSources', 2);
-      setMetric('uniqueHolders', unique);
-      updateBars({ ethereum, base, unique });
+        const ethereumLive = ethereumResult.status === 'fulfilled';
+        const baseLive = baseResult.status === 'fulfilled';
 
-      if (!ethereumLive) setText('ethereumBarValue', `${ethereum.toLocaleString()}*`);
-      if (!baseLive) setText('baseBarValue', `${base.toLocaleString()}*`);
+        const ethereumSet = ethereumLive ? ethereumResult.value : new Set();
+        const baseSet = baseLive ? baseResult.value : new Set();
 
-      if (ethereumLive && baseLive) {
-        const overlap = countOverlap(ethereumSet, baseSet);
-        console.log(`Live holder comparison complete. Ethereum: ${ethereum}, Base: ${base}, Overlap: ${overlap}, Unique: ${unique}`);
-      } else {
-        console.warn('One or more live holder sources failed. Fallback counts were used.');
+        const ethereum = ethereumLive ? ethereumSet.size : CONFIG.fallbackEthereumHolders;
+        const base = baseLive ? baseSet.size : CONFIG.fallbackBaseHolders;
+
+        let unique;
+        if (ethereumLive && baseLive) {
+          const allHolders = new Set([...ethereumSet, ...baseSet]);
+          unique = allHolders.size;
+        } else {
+          unique = Math.max(0, ethereum + base - CONFIG.fallbackCrossChainOverlap);
+        }
+
+        setStatus(
+          'ethereum',
+          ethereumLive ? 'ok' : 'error',
+          ethereumLive ? `Live from Blockscout · ${new Date().toLocaleString()}` : 'Ethereum live fetch failed — showing fallback count'
+        );
+
+        setStatus(
+          'base',
+          baseLive ? 'ok' : 'error',
+          baseLive ? `Live from Blockscout · ${new Date().toLocaleString()}` : 'Base live fetch failed — showing fallback count'
+        );
+
+        setMetric('ethereumHolders', ethereum);
+        setMetric('baseHolders', base);
+        setMetric('indexedSources', 2);
+        setMetric('uniqueHolders', unique);
+        updateBars({ ethereum, base, unique });
+
+        if (!ethereumLive) setText('ethereumBarValue', `${ethereum.toLocaleString()}*`);
+        if (!baseLive) setText('baseBarValue', `${base.toLocaleString()}*`);
+
+        if (ethereumLive && baseLive) {
+          const overlap = countOverlap(ethereumSet, baseSet);
+          console.log(`Live holder comparison complete. Ethereum: ${ethereum}, Base: ${base}, Overlap: ${overlap}, Unique: ${unique}`);
+        } else {
+          console.warn('One or more live holder sources failed. Fallback counts were used.');
+        }
+      } finally {
+        if (refreshButton) {
+          refreshButton.disabled = false;
+          refreshButton.textContent = 'Refresh live counts';
+        }
       }
     }
 
