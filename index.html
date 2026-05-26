@@ -146,6 +146,32 @@
       letter-spacing: -0.04em;
     }
 
+    .metric-value.loading {
+      color: var(--muted);
+      font-size: 24px;
+    }
+
+    .live-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .live-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: var(--amber);
+      display: inline-block;
+    }
+
+    .live-dot.ok { background: var(--green); }
+    .live-dot.error { background: var(--red); }
+
     .highlight {
       border-color: var(--dark);
       border-width: 2px;
@@ -362,19 +388,20 @@
     <section class="metrics">
       <div class="card">
         <div class="metric-title">Ethereum Holders</div>
-        <div class="metric-value">67</div>
+        <div id="ethereumHolders" class="metric-value">67</div>
       </div>
       <div class="card">
         <div class="metric-title">Base Holders</div>
-        <div class="metric-value">176</div>
+        <div id="baseHolders" class="metric-value loading">Loading</div>
+        <div class="live-status"><span id="baseStatusDot" class="live-dot"></span><span id="baseStatusText">Fetching live holders</span></div>
       </div>
       <div class="card">
         <div class="metric-title">Indexed Sources</div>
-        <div class="metric-value">2</div>
+        <div id="indexedSources" class="metric-value">2</div>
       </div>
       <div class="card highlight">
         <div class="metric-title">Unique Holders</div>
-        <div class="metric-value">218</div>
+        <div id="uniqueHolders" class="metric-value loading">Loading</div>
       </div>
     </section>
 
@@ -387,18 +414,18 @@
         <div class="bar-wrap">
           <div class="bar-line">
             <span>Ethereum</span>
-            <div class="bar-bg"><div class="bar-fill" style="width:31%;"></div></div>
-            <span>67</span>
+            <div class="bar-bg"><div id="ethereumBar" class="bar-fill" style="width:31%;"></div></div>
+            <span id="ethereumBarValue">67</span>
           </div>
           <div class="bar-line">
             <span>Base</span>
-            <div class="bar-bg"><div class="bar-fill" style="width:81%;"></div></div>
-            <span>176</span>
+            <div class="bar-bg"><div id="baseBar" class="bar-fill" style="width:0%;"></div></div>
+            <span id="baseBarValue">—</span>
           </div>
           <div class="bar-line">
             <span>Unique</span>
-            <div class="bar-bg"><div class="bar-fill" style="width:100%;"></div></div>
-            <span>218</span>
+            <div class="bar-bg"><div id="uniqueBar" class="bar-fill" style="width:100%;"></div></div>
+            <span id="uniqueBarValue">—</span>
           </div>
         </div>
       </div>
@@ -454,7 +481,7 @@
     <section id="holders" class="tab-panel">
       <div class="card">
         <h2 class="section-title">Cross-Chain Holder Lookup</h2>
-        <p class="section-text">Sample table. In production, this table is loaded from the indexer database.</p>
+        <p class="section-text">Live Base holder count is fetched from Blockscout. The sample wallet rows below remain static until connected to a full holder-list table.</p>
         <table style="margin-top:18px;">
           <thead>
             <tr>
@@ -555,17 +582,118 @@
     </section>
 
     <p class="footer-note">
-      Prototype dashboard. Replace static numbers with live indexer output before using as an official reporting source.
+      Live dashboard. Base holder count updates from Blockscout on page load. Ethereum holders and cross-chain overlap are still configured constants until you connect a second live source.
     </p>
   </main>
 
   <script>
+    const CONFIG = {
+      // Base CHI token from your BaseScan link.
+      baseTokenAddress: "0x25Ec4c3eF2A21d178922Fb02c7F92111852165E8",
+
+      // Ethereum CHI is still static because the prototype only had a shortened address.
+      // Replace with the full Ethereum token address when you want that side live too.
+      ethereumHolders: 67,
+
+      // Your old dashboard implied 25 wallets overlapped across Ethereum and Base:
+      // 67 + 176 - 218 = 25.
+      crossChainOverlap: 25,
+
+      // Fallback number shown only if the live API fails.
+      fallbackBaseHolders: 190,
+
+      // Public Blockscout endpoint, no API key needed.
+      blockscoutBaseApi: "https://base.blockscout.com/api"
+    };
+
     function showTab(id, button) {
       document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
       document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
       document.getElementById(id).classList.add('active');
       button.classList.add('active');
     }
+
+    function setText(id, value) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    }
+
+    function setMetric(id, value) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = Number(value).toLocaleString();
+      el.classList.remove('loading');
+    }
+
+    function setStatus(kind, text) {
+      const dot = document.getElementById('baseStatusDot');
+      const label = document.getElementById('baseStatusText');
+      if (dot) dot.className = `live-dot ${kind}`;
+      if (label) label.textContent = text;
+    }
+
+    function updateBars({ ethereum, base, unique }) {
+      const max = Math.max(ethereum, base, unique, 1);
+      const ethPct = Math.round((ethereum / max) * 100);
+      const basePct = Math.round((base / max) * 100);
+      const uniquePct = Math.round((unique / max) * 100);
+
+      document.getElementById('ethereumBar').style.width = `${ethPct}%`;
+      document.getElementById('baseBar').style.width = `${basePct}%`;
+      document.getElementById('uniqueBar').style.width = `${uniquePct}%`;
+
+      setText('ethereumBarValue', ethereum.toLocaleString());
+      setText('baseBarValue', base.toLocaleString());
+      setText('uniqueBarValue', unique.toLocaleString());
+    }
+
+    async function fetchBaseHolderCount() {
+      const url = new URL(CONFIG.blockscoutBaseApi);
+      url.searchParams.set('module', 'token');
+      url.searchParams.set('action', 'getTokenHolders');
+      url.searchParams.set('contractaddress', CONFIG.baseTokenAddress);
+      url.searchParams.set('page', '1');
+      url.searchParams.set('offset', '10000');
+
+      const response = await fetch(url.toString(), { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const data = await response.json();
+      if (!Array.isArray(data.result)) throw new Error(data.message || 'Unexpected API response');
+
+      // Count all addresses returned by Blockscout with holder balances.
+      return data.result.length;
+    }
+
+    async function loadLiveData() {
+      const ethereum = CONFIG.ethereumHolders;
+      let base;
+      let usedFallback = false;
+
+      try {
+        base = await fetchBaseHolderCount();
+        setStatus('ok', `Live from Blockscout · ${new Date().toLocaleString()}`);
+      } catch (error) {
+        console.error('Live holder fetch failed:', error);
+        base = CONFIG.fallbackBaseHolders;
+        usedFallback = true;
+        setStatus('error', 'Live fetch failed — showing fallback count');
+      }
+
+      const unique = Math.max(0, ethereum + base - CONFIG.crossChainOverlap);
+
+      setMetric('ethereumHolders', ethereum);
+      setMetric('baseHolders', base);
+      setMetric('indexedSources', 2);
+      setMetric('uniqueHolders', unique);
+      updateBars({ ethereum, base, unique });
+
+      if (usedFallback) {
+        setText('baseBarValue', `${base.toLocaleString()}*`);
+      }
+    }
+
+    loadLiveData();
   </script>
 </body>
 </html>
