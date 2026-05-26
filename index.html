@@ -345,6 +345,52 @@
       line-height: 1.55;
     }
 
+
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .button,
+    .button:visited {
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .button.secondary {
+      background: #ffffff;
+      color: var(--dark);
+      border: 1px solid var(--border);
+    }
+
+    .clickable-card {
+      color: inherit;
+      text-decoration: none;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+      cursor: pointer;
+    }
+
+    .clickable-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--dark);
+    }
+
+    .contract-link,
+    .contract-link:visited {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .contract-link:hover {
+      text-decoration: underline;
+    }
+
     @media (max-width: 900px) {
       .hero {
         align-items: flex-start;
@@ -381,20 +427,25 @@
         <p class="subtitle">
           A simple public dashboard that shows Ethereum + Base CHI holders, explains how holder data is indexed, and presents one cross-chain unique holder number from the indexer output.
         </p>
+        <div class="actions">
+          <a class="button" href="https://eth.blockscout.com/token/0x83E8fb8D8176224FCC828EdC73E152EC1818a2dA" target="_blank" rel="noopener">Open Ethereum CHI</a>
+          <a class="button" href="https://base.blockscout.com/token/0x25Ec4c3eF2A21d178922Fb02c7F92111852165E8" target="_blank" rel="noopener">Open Base CHI</a>
+          <button class="button secondary" type="button" onclick="loadLiveData()">Refresh live counts</button>
+        </div>
       </div>
     </section>
 
     <section class="metrics">
-      <div class="card">
+      <a class="card clickable-card" href="https://eth.blockscout.com/token/0x83E8fb8D8176224FCC828EdC73E152EC1818a2dA" target="_blank" rel="noopener" aria-label="Open Ethereum CHI token page">
         <div class="metric-title">Ethereum Holders</div>
         <div id="ethereumHolders" class="metric-value loading">Loading</div>
         <div class="live-status"><span id="ethereumStatusDot" class="live-dot"></span><span id="ethereumStatusText">Fetching Ethereum holders</span></div>
-      </div>
-      <div class="card">
+      </a>
+      <a class="card clickable-card" href="https://base.blockscout.com/token/0x25Ec4c3eF2A21d178922Fb02c7F92111852165E8" target="_blank" rel="noopener" aria-label="Open Base CHI token page">
         <div class="metric-title">Base Holders</div>
         <div id="baseHolders" class="metric-value loading">Loading</div>
         <div class="live-status"><span id="baseStatusDot" class="live-dot"></span><span id="baseStatusText">Fetching Base holders</span></div>
-      </div>
+      </a>
       <div class="card">
         <div class="metric-title">Indexed Sources</div>
         <div id="indexedSources" class="metric-value">2</div>
@@ -434,8 +485,8 @@
         <h2 class="section-title">Chain Contracts</h2>
         <p class="section-text">Displayed as the two indexed CHI sources.</p>
         <div class="audit-list" style="margin-top:18px;">
-          <div class="audit-row"><span>Ethereum CHI</span><strong>0x83E8...a2dA</strong></div>
-          <div class="audit-row"><span>Base CHI</span><strong>0x25Ec...65E8</strong></div>
+          <div class="audit-row"><span>Ethereum CHI</span><a class="contract-link" href="https://eth.blockscout.com/token/0x83E8fb8D8176224FCC828EdC73E152EC1818a2dA" target="_blank" rel="noopener"><strong>0x83E8...a2dA</strong></a></div>
+          <div class="audit-row"><span>Base CHI</span><a class="contract-link" href="https://base.blockscout.com/token/0x25Ec4c3eF2A21d178922Fb02c7F92111852165E8" target="_blank" rel="noopener"><strong>0x25Ec...65E8</strong></a></div>
           <div class="audit-row"><span>Networks indexed</span><strong>2</strong></div>
         </div>
       </div>
@@ -444,7 +495,6 @@
     <div class="tabs">
       <button class="tab active" onclick="showTab('architecture', this)">Architecture</button>
       <button class="tab" onclick="showTab('holders', this)">Holder Table</button>
-      <button class="tab" onclick="showTab('supply', this)">Supply Risk</button>
     </div>
 
     <section id="architecture" class="tab-panel active">
@@ -530,37 +580,8 @@
       </div>
     </section>
 
-    <section id="supply" class="tab-panel">
-      <div class="grid">
-        <div class="card">
-          <h2 class="section-title">Supply Risk View</h2>
-          <p class="section-text">
-            Illustrative view using 4.8B circulating supply and 100B max supply. This helps explain the gap between current market cap and fully diluted valuation.
-          </p>
-          <div class="bar-wrap">
-            <div class="bar-line">
-              <span>Circulating</span>
-              <div class="bar-bg"><div class="bar-fill" style="width:4.8%; background:var(--green);"></div></div>
-              <span>4.8%</span>
-            </div>
-            <div class="bar-line">
-              <span>Remaining</span>
-              <div class="bar-bg"><div class="bar-fill" style="width:95.2%; background:var(--amber);"></div></div>
-              <span>95.2%</span>
-            </div>
-          </div>
-        </div>
-        <div class="card">
-          <h2 class="section-title">Supply Note</h2>
-          <p class="section-text">
-            A high FDV relative to circulating market cap can create dilution concerns if large amounts of CHI become tradable without matching demand.
-          </p>
-        </div>
-      </div>
-    </section>
-
     <p class="footer-note">
-      Live dashboard. Ethereum and Base holder counts update from Blockscout on page load. Unique holders are calculated by comparing both live holder lists wallet by wallet when both sources load successfully.
+      Live dashboard. Ethereum and Base holder counts update from Blockscout on page load. Click the Ethereum or Base cards to open the token pages. Click Refresh live counts to reload the holder data.
     </p>
   </main>
 
